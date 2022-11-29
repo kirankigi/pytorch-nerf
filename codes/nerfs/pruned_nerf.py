@@ -3,6 +3,7 @@ import numpy as np
 import torch
 
 from torch import nn, optim
+import sys 
 
 
 def get_coarse_query_points(ds, N_c, t_i_c_bin_edges, t_i_c_gap, os):
@@ -178,14 +179,29 @@ class NeRFMLP(nn.Module):
  
         #### opacity pruning
 
-        SIGMA_THRESHOLD = 0.01
-        for i in range(outputs[:,0].size()[0]):
+        n = outputs[:,0].size()[0]
+        SIGMA_THRESHOLD,indx = torch.kthvalue(outputs[:,0], n//10)
+
+        for i in range(n):
             if outputs[:, 0][i] < SIGMA_THRESHOLD:
                outputs[:, 0][i] = 0
         ######
 
         sigma_is = torch.relu(outputs[:, 0])
-        
+       
+        # #### opacity pruning
+
+        # SIGMA_THRESHOLD = 0.01
+        # for i in range(sigma_is.size()[0]):
+        #     if sigma_is[i] < SIGMA_THRESHOLD:
+        #         sigma_is[i] = 0
+
+        # outputs[:, 0]
+        # # torch.max(sigma_is,SIGMA_THRESHOLD)
+
+        # sigma_is=sigma_is/torch.linalg.norm(sigma_is)
+        # ######
+
         outputs = self.pre_final_layer(torch.cat([ds_encoded, outputs[:, 1:]], dim=-1))
         c_is = self.final_layer(outputs)
 
@@ -220,8 +236,10 @@ def main():
     decay_rate = 0.1
 
     # Load dataset.
-    data_f = "66bdbc812bd0a196e194052f3f12cb2e.npz"
+    # data_f = "66bdbc812bd0a196e194052f3f12cb2e.npz"
+    data_f = sys.argv[1]
     data = np.load(data_f)
+    results_path = sys.argv[2]
 
     # Set up initial ray origin (init_o) and ray directions (init_ds). These are the
     # same across samples, we just rotate them based on the orientation of the camera.
@@ -241,7 +259,7 @@ def main():
 
     # Set up test view.
     test_idx = 150
-    plt.imsave("results_nerf/target.png",images[test_idx])
+    plt.imsave(f"{results_path}/target.png",images[test_idx])
     # plt.show()
     test_img = torch.Tensor(images[test_idx]).to(device)
     poses = data["poses"]
@@ -275,6 +293,7 @@ def main():
     display_every = 100
     F_c.train()
     F_f.train()
+    losses_list = []
     for i in range(num_iters):
         # Sample image and associated pose.
         target_img_idx = np.random.randint(images.shape[0])
@@ -341,7 +360,9 @@ def main():
                 )
 
             loss = criterion(C_rs_f, test_img)
-            print(f"Loss: {loss.item()}")
+            # print(f"Loss: {loss.item()}")
+            losses_list.append(loss.item())
+
             psnr = -10.0 * torch.log10(loss)
 
             psnrs.append(psnr.item())
@@ -354,11 +375,12 @@ def main():
             plt.subplot(122)
             plt.plot(iternums, psnrs)
             plt.title("PSNR")
-            plt.savefig(f"results_nerf/{i}.png")
+            plt.savefig(f"{results_path}/{i}.png")
 
             F_c.train()
             F_f.train()
 
+    np.save(f"{results_path}/losses_pruned_nerf.npy",losses_list)
     print("Done!")
 
 

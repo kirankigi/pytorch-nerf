@@ -71,6 +71,7 @@ def get_image_features_for_query_points(r_ts, camera_distance, scale, W_i):
 
 
 def render_radiance_volume(r_ts, ds, z_is, chunk_size, F, t_is):
+    threshold = 0.01
     r_ts_flat = r_ts.reshape((-1, 3))
     ds_rep = ds.unsqueeze(2).repeat(1, 1, r_ts.shape[-2], 1)
     ds_flat = ds_rep.reshape((-1, 3))
@@ -83,6 +84,8 @@ def render_radiance_volume(r_ts, ds, z_is, chunk_size, F, t_is):
         w_is_batch = z_is_flat[chunk_start: chunk_start + chunk_size]
         preds = F(r_ts_batch, ds_batch, w_is_batch)
         c_is.append(preds["c_is"])
+        # if preds["sigma_is"] < threshold:
+
         sigma_is.append(preds["sigma_is"])
 
     c_is = torch.cat(c_is).reshape(r_ts.shape)
@@ -214,7 +217,7 @@ def load_data():
     # Initialize dataset and test object/poses.
     data_dir = "data"
     # See Section B.2.1 in the Supplementary Materials.
-    num_iters = 10000
+    num_iters = 3000
     test_obj_idx = 5
     test_source_pose_idx = 11
     test_target_pose_idx = 33
@@ -314,7 +317,7 @@ def main():
     iternums = []
     num_iters = train_dataset.N
     use_bbox = True
-    num_bbox_iters = 300000
+    num_bbox_iters = 3000
     display_every = 100
     F_c.train()
     F_f.train()
@@ -430,15 +433,15 @@ def main():
             psnrs.append(psnr.item())
             iternums.append(i)
 
-            # plt.figure(figsize=(10, 4))
-            # plt.subplot(121)
-            plt.imsave(f"results/{i}_img.png", C_rs_f.detach().cpu().numpy())
+            plt.figure(figsize=(10, 4))
+            plt.subplot(121)
+            plt.imshow(C_rs_f.detach().cpu().numpy())
             plt.title(f"Iteration {i}")
             plt.subplot(122)
-            # plt.plot(iternums, psnrs)
-            # plt.title("PSNR")
+            plt.plot(iternums, psnrs)
+            plt.title("PSNR")
             # plt.show()
-
+            plt.savefig(f"results/{i}.png")
             F_c.train()
             F_f.train()
 

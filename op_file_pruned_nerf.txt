@@ -1,0 +1,7 @@
+==========================================
+SLURM_JOB_ID = 801774
+SLURM_NODELIST = gnode075
+SLURM_JOB_GPUS = 1
+==========================================
+/home2/narayana_reedy/kiran/pytorch-nerf/./codes/nerfs/pruned_nerf.py:309: UserWarning: __floordiv__ is deprecated, and its behavior will change in a future version of pytorch. It currently rounds toward 0 (like the 'trunc' function NOT 'floor'). This results in incorrect rounding for negative values. To keep the current behavior, use torch.div(a, b, rounding_mode='trunc'), or for actual floor division, use torch.div(a, b, rounding_mode='floor').
+  pix_idx_rows = pix_idxs // img_size

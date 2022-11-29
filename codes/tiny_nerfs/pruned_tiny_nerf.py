@@ -3,7 +3,7 @@ import numpy as np
 import torch
 
 from torch import nn, optim
-
+import sys
 
 def get_coarse_query_points(ds, N_c, t_i_c_bin_edges, t_i_c_gap, os):
     u_is_c = torch.rand(*list(ds.shape[:2]) + [N_c]).to(ds)
@@ -52,6 +52,22 @@ def run_one_iter_of_tiny_nerf(ds, N_c, t_i_c_bin_edges, t_i_c_gap, os, chunk_siz
     C_rs_c = render_radiance_volume(r_ts_c, ds, chunk_size, F_c, t_is_c)
     return C_rs_c
 
+# def custum_activation_by_opacity(x):
+#     # SIGMA_THRESHOLD = 0.01
+#     # if x < SIGMA_THRESHOLD:
+#     #     return 0
+#     # else: 
+#     #     return x
+#     return x * torch.sigmoid(x)
+
+
+# class opacity_pruning_func(nn.Module):
+#     def __init__(self, slope = 1):
+#         super().__init__()
+#         self.slope = slope * torch.nn.Parameter(torch.ones(1))
+
+#     def forward(self, x):
+#         return self.slope * x * torch.sigmoid(x)
 
 class VeryTinyNeRFMLP(nn.Module):
     def __init__(self):
@@ -74,6 +90,8 @@ class VeryTinyNeRFMLP(nn.Module):
             nn.Linear(net_width, 3),
             nn.Sigmoid(),
         )
+        # self.slope = 1
+        # self.opacity_prune = opacity_pruning_func(self.slope)
 
     def forward(self, xs, ds):
         xs_encoded = [xs]
@@ -92,7 +110,24 @@ class VeryTinyNeRFMLP(nn.Module):
         ds_encoded = torch.cat(ds_encoded, dim=-1)
 
         outputs = self.early_mlp(xs_encoded)
+
+       
+       
         sigma_is = outputs[:, 0]
+
+         #### opacity pruning
+        # sigma_is = self.opacity_prune(sigma_is)
+        n = sigma_is.size()[0]
+        SIGMA_THRESHOLD,indx = torch.kthvalue(sigma_is, n//10)
+
+        sig = torch.zeros_like(sigma_is)
+        mask = sigma_is[:] <= SIGMA_THRESHOLD
+        sig[mask] = sigma_is[mask]
+        sig[~mask] = sigma_is[~mask]
+        ######
+
+        sigma_is = sig
+
         c_is = self.late_mlp(torch.cat([outputs[:, 1:], ds_encoded], dim=-1))
         return {"c_is": c_is, "sigma_is": sigma_is}
 
@@ -110,8 +145,9 @@ def main():
     optimizer = optim.Adam(F_c.parameters(), lr=lr)
     criterion = nn.MSELoss()
 
-    data_f = "66bdbc812bd0a196e194052f3f12cb2e.npz"
+    data_f = sys.argv[1]
     data = np.load(data_f)
+    results_path = sys.argv[2]
 
     images = data["images"] / 255
     img_size = images.shape[1]
@@ -148,6 +184,8 @@ def main():
     num_iters = 20000
     display_every = 100
     F_c.train()
+    losses_list = []
+
     for i in range(num_iters):
         target_img_idx = np.random.randint(images.shape[0])
         target_pose = poses[target_img_idx].to(device)
@@ -172,7 +210,8 @@ def main():
                 )
 
             loss = criterion(C_rs_c, test_img)
-            print(f"Loss: {loss.item()}")
+            # print(f"Loss: {loss.item()}")
+            losses_list.append(loss.item())
             psnr = -10.0 * torch.log10(loss)
 
             psnrs.append(psnr.item())
@@ -185,10 +224,11 @@ def main():
             plt.subplot(122)
             plt.plot(iternums, psnrs)
             plt.title("PSNR")
-            plt.savefig(f"results_tiny_nerf/{i}.png")
+            plt.savefig(f"{results_path}/{i}.png")
 
             F_c.train()
 
+    np.save(f"{results_path}/losses_pruned_tiny_nerf.npy",losses_list)
     print("Done!")
 
 
