@@ -241,15 +241,15 @@ def load_data():
     return train_dataset
 
 
-def load_data2():
+def load_data2(oi,s,t):
     # Initialize dataset and test object/poses.
     data_dir = "data"
     # See Section B.2.1 in the Supplementary Materials.
-    num_iters = 3000
-    test_obj_idx = 5
-    test_source_pose_idx =   np.random.randint(0,50)
+    num_iters = 10000
+    test_obj_idx = oi
+    test_source_pose_idx = s
 
-    test_target_pose_idx =  np.random.randint(0,50)
+    test_target_pose_idx = t
 
     if test_source_pose_idx==test_target_pose_idx:
         test_target_pose_idx = (test_target_pose_idx*2)%50
@@ -314,14 +314,18 @@ def main():
     n_batch_pix = batch_img_size**2
     n_objs = 4
 
+    oi=5
+    s = [0,5,10,20,30]
+    t = 40
+
     # See Section B.2 in the Supplementary Materials.
     lr = 1e-4
     optimizer = optim.Adam(list(F_c.parameters()) +
                            list(F_f.parameters()), lr=lr)
     criterion = nn.MSELoss()
 
-    for tr_set in range(4):
-        train_dataset = load_data2()
+    for tr_set in range(5):
+        train_dataset = load_data2(oi,s[tr_set],t)
         camera_distance = train_dataset.camera_distance
         scale = train_dataset.scale
         img_size = train_dataset[0][2].shape[0]
