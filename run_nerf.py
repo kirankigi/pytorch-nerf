@@ -175,19 +175,17 @@ class NeRFMLP(nn.Module):
         outputs = self.early_mlp(xs_encoded)
         outputs = self.late_mlp(torch.cat([xs_encoded, outputs], dim=-1))
         outputs = self.sigma_layer(outputs)
-        sigma_is = torch.relu(outputs[:, 0])
-        
+ 
         #### opacity pruning
 
         SIGMA_THRESHOLD = 0.01
-        for i in range(sigma_is.size()[0]):
-            if sigma_is[i] < SIGMA_THRESHOLD:
-                sigma_is[i] = 0
-        # torch.max(sigma_is,SIGMA_THRESHOLD)
-
-        sigma_is=sigma_is/torch.linalg.norm(sigma_is)
+        for i in range(outputs[:,0].size()[0]):
+            if outputs[:, 0][i] < SIGMA_THRESHOLD:
+               outputs[:, 0][i] = 0
         ######
-       
+
+        sigma_is = torch.relu(outputs[:, 0])
+        
         outputs = self.pre_final_layer(torch.cat([ds_encoded, outputs[:, 1:]], dim=-1))
         c_is = self.final_layer(outputs)
 
